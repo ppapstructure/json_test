@@ -1,0 +1,9 @@
+flask
+gunicorn
+flask-migrate
+pymysql
+cryptography
+flask-wtf
+flask_mail
+flask_login
+email_validator

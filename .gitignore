@@ -1,0 +1,5 @@
+*.pyc
+__pycache__
+migrations
+test.py
+의문.txt

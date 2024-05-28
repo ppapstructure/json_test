@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  app:
+    container_name: app
+    build: .
+    volumes:
+      - ./project:/app
+    depends_on:
+      - db
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - app
+
+  db:
+    container_name: db
+    image: mysql:latest
+    volumes:
+      - db-data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: "0000"
+      MYSQL_DATABASE: mydatabase
+
+volumes:
+  db-data:
