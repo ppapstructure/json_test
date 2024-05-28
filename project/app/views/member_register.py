@@ -22,7 +22,6 @@ def select_all():
     except Exception as e:
         return jsonify({'message': 'Internal server error', 'error': str(e)}), 500
 
-
 # GET_SELECT
 @bp.route('/select_one/<int:user_id>', methods=['GET'])
 def select_one(user_id):
@@ -42,19 +41,30 @@ def select_one(user_id):
 # POST
 @bp.route('/create', methods=['POST'])
 def create():
+    
     # HTML FORM
     form = CreateUserForm()
-
     if form.validate_on_submit():
         try:
             user = User(username=form.username.data, password=form.password1.data, email=form.email.data)
             db.session.add(user)
             db.session.commit()
-            send_welcome_email(user)  # 가입 안내 메일 발송
+            
+            # 가입 안내 메일 발송
+            send_welcome_email(user)  
             return jsonify({'message':'User created successfully'})
+        
         except IntegrityError:
-            db.session.rollback() # 세션 롤백
+            db.session.rollback() 
             return jsonify({'error':'Database error, possibly due to duplicate data.'}), 409
+        
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            return jsonify({'message':'Database error', 'error':str(e)}), 500
+        
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'message':'Internal server error', 'error':str(e)}), 500
     else:
         return jsonify({'errors': form.errors}), 400
 
@@ -66,8 +76,9 @@ We are glad to have you on board.
 '''
     mail.send(msg)
 
-# 수정
-# PUT (change)
+# PUT
+
+'''
 @bp.route('/update/<int:user_id>',methods=['PUT'])
 def update(user_id):
     user = User.query.get(user_id)
@@ -84,12 +95,40 @@ def update(user_id):
             return jsonify({'error':form.errors}), 400
     else:
         return jsonify({'message':'User not found'}), 404
+'''
 
-# 삭제    
-# DELETE (delete)
+@bp.route('/update/<int:user_id>', methods=['PUT'])
+def update(user_id):
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+        
+        form = CreateUserForm()
+        if form.validate_on_submit():
+            user.username = form.username.data
+            if form.password1.data == form.password2.data:
+                user.password = form.password1.data
+            else:
+                return jsonify({'error': 'Passwords do not match'}), 400
+            user.email = form.email.data
+            db.session.commit()
+            return jsonify({'message': 'User updated successfully'})
+        else:
+            return jsonify({'errors': form.errors}), 400
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return jsonify({"message": "Database error", "error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"message": "Internal server error", "error": str(e)}), 500
+
+
+# DELETE
 @bp.route('/delete/<int:user_id>',methods=['DELETE'])
 def delete(user_id):
-    user = User.query.get(user_id) # 특정 ID를 가진 사용자를 데이터베이스에서 조회
+
+    # 특정 ID를 가진 사용자를 데이터베이스에서 조회
+    user = User.query.get(user_id) 
     if user:
         db.session.delete(user) 
         db.session.commit()

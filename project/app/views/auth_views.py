@@ -6,14 +6,13 @@ from app.forms import UserLoginForm
 
 bp = Blueprint('auth', __name__)
 
-# 처음 데이터 저장할때 해쉬로 저장하지 않아서 아직 해쉬함수로 사용x
 @bp.route('/login', methods=['POST'])
 def login():
     form = UserLoginForm(request.form)
     if form.validate():
         user = User.query.filter_by(email=form.email.data).first()
-        #if user and check_password_hash(user.password, form.password.data):
-        if user and user.password == form.password.data:
+
+        if user and user.check_password(form.password.data):
             login_user(user)
             return jsonify(success=True, message='login success')
         else:

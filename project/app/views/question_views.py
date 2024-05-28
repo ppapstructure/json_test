@@ -2,7 +2,7 @@ from datetime import datetime
 
 from flask import jsonify, Blueprint
 from flask_login import login_required, current_user
-from app.forms import QuestionForm, AnswerForm
+from app.forms import QuestionForm
 
 from app import db
 from app.models import Question
@@ -38,13 +38,16 @@ def _list():
 @bp.route('/detail/<int:question_id>/', methods=['GET'])
 def detail(question_id):
     try:
-        question = Question.query.get_or_404(question_id)
+        question = Question.query.get(question_id)
+        if not question:
+            return jsonify({'message': 'Question not found'}), 404
+        
         question_data = {
             'id': question.id,
             'subject': question.subject,
             'content': question.content,
-            'answers': [{'id': answer.id, 'content': answer.content, 'create_date': answer.create_date, 'writer': answer.user.email}
-                        for answer in question.answer_set],
+            'answers': [{'id': answer.id, 'content': answer.content, 'create_date': answer.create_date, 
+                         'writer': answer.user.email} for answer in question.answer_set],
             'create_date': question.create_date,
             'writer': question.user.email,
             'has_answers': question.has_answers
@@ -67,42 +70,69 @@ def create():
             db.session.add(question)
             db.session.commit()
             return jsonify({'message':'Question created successfully'})
-        except IntegrityError:
+        
+         # 데이터베이스 제약 조건 위배 시 처리
+        except IntegrityError: 
             db.session.rollback()
             return jsonify({'error':'Database error, possibly due to duplicate data.'}), 409
+        
+        # 데이터베이스 에러
+        except SQLAlchemyError as e: 
+            db.session.rollback()
+            return jsonify({'message':'Database error', 'error':str(e)}), 500
+        
+        # 그 외 에러
+        except Exception as e: 
+            db.session.rollback()
+            return jsonify({'message':'Internal server error', 'error':str(e)}), 500
     else:
         return jsonify({'errors': form.errors}), 400
 
+# 내 계정이 아닐경우, 우선은 수정/삭제 불가능함
+# 그러나 내 계정이 아닐경우 수정, 삭제 안보이게 할수 있으면 더 좋을 것 같음
 # PUT
-@bp.route('/update/<int:question_id>',methods=['PUT'])
+@bp.route('/update/<int:question_id>', methods=['PUT'])
 @login_required
 def update(question_id):
-    question = Question.query.get(question_id)
-    if question and question.user_id == current_user.id:
+    try:
+        question = Question.query.get(question_id)
+        if not question:
+            return jsonify({"message": "Question not found"}), 404
+        if question.user_id != current_user.id:
+            return jsonify({"message": "This is not your post"}), 403
+        
         form = QuestionForm()
         if form.validate_on_submit():
             question.subject = form.subject.data
             question.content = form.content.data
             db.session.commit()
-            return jsonify({'message':'Question updated successfully'})
+            return jsonify({"message": "Question updated successfully"})
         else:
-            return jsonify({'error':form.errors}), 400
-    elif question.user_id != current_user.id:
-        return jsonify({'message':'This is not your post'}), 404
-    else:
-        return jsonify({'message':'Question not found'}), 404
+            return jsonify({"errors": form.errors}), 400
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return jsonify({"message": "Database error", "error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"message": "Internal server error", "error": str(e)}), 500
+
 
 # DELETE
-# 질문 삭제시 질문에 연결된 답변도 같이 삭제되어야 함
 @bp.route('/delete/<int:question_id>', methods=['DELETE'])
 @login_required
 def delete(question_id):
-    question = Question.query.get(question_id)
-    if question and question.user_id == current_user.id:
-        db.session.delete(question) 
-        db.session.commit()  
+    try:
+        question = Question.query.get(question_id)
+        if not question:
+            return jsonify({'message':'Question not found'}), 404
+        if question.user_id != current_user.id:
+            return jsonify({'message':'This is not your post'}), 403
+        
+        db.session.delete(question)
+        db.session.commit()
         return jsonify({'message':'Question deleted'})
-    elif question.user_id != current_user.id:
-        return jsonify({'message':'This is not your post'}), 404    
-    else:
-        return jsonify({'message':'Question not found'}), 404
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return jsonify({'message':'Database error', 'error':str(e)}), 500
+    except Exception as e:
+        return jsonify({'message':'Internal server error', 'error':str(e)}), 500
+        
